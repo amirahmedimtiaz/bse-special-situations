@@ -41,7 +41,7 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
       WORKERS: '8'
       MAX_RUN_USD: '10'
-      MAX_OCR_PAGES: '40'
+      MAX_OCR_PAGES: '80'
       MAX_PDF_MB: '30'
       RUN_MINUTES: '150'
       PYTHONUNBUFFERED: '1'

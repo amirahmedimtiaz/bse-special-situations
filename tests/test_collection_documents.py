@@ -93,7 +93,18 @@ def test_no_text_uses_ocr(monkeypatch, tmp_path):
 
 def test_ocr_limit(tmp_path):
     with pytest.raises(ValueError, match="OCR limit"):
-        documents.ocr_pdf(tmp_path / "x.pdf", 41, Config())
+        documents.ocr_pdf(tmp_path / "x.pdf", 41, Config(max_ocr_pages=40))
+
+
+def test_total_ocr_timeout_releases_capacity(monkeypatch, tmp_path):
+    times = iter([0, 481])
+    released = []
+    monkeypatch.setattr(documents.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(documents, "_OCR_SLOTS", SimpleNamespace(acquire=lambda **k: True,
+                         release=lambda: released.append(True)))
+    with pytest.raises(TimeoutError, match="eight minutes"):
+        documents.ocr_pdf(tmp_path / "x.pdf", 1, Config())
+    assert released == [True]
 
 
 def test_ocr_bounds_cpu_and_pixels(monkeypatch, tmp_path):

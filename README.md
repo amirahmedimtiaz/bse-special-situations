@@ -102,9 +102,10 @@ Inspect deployed coverage and outbox status without sending email or modifying r
 ## Limits and recovery
 
 - Defaults: 8 workers, 150-minute run guard, 30 MB download cap, 1,000-page text cap,
-  40-page image-only OCR cap, 40,000-character sections, 6,144 output/reasoning tokens.
+  80-page image-only OCR cap, 40,000-character sections, 6,144 output/reasoning tokens.
   OCR has a separate two-process limit, single-threaded Tesseract and 2,400-pixel
-  maximum rendered page dimension to avoid oversubscribing a free runner.
+  maximum rendered page dimension to avoid oversubscribing a free runner. Each OCR
+  document has an eight-minute total time limit, including the wait for OCR capacity.
   Oversized, corrupt, encrypted, unsupported or unreadable attachments become review items.
 - The $10/run admission guard reserves a conservative price estimate before each model
   call and records returned usage costs. Prices are read from the live model catalog.

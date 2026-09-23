@@ -16,7 +16,7 @@ class Config:
     reasoning: str = "high"
     workers: int = 8
     max_run_usd: float = 10.0
-    max_ocr_pages: int = 40
+    max_ocr_pages: int = 80
     max_pdf_mb: int = 30
     run_minutes: int = 150
     chunk_chars: int = 40000
@@ -29,7 +29,7 @@ class Config:
                   reasoning=os.getenv("REASONING_EFFORT", "high"),
                   workers=int(os.getenv("WORKERS", "8")),
                   max_run_usd=float(os.getenv("MAX_RUN_USD", "10")),
-                  max_ocr_pages=int(os.getenv("MAX_OCR_PAGES", "40")),
+                  max_ocr_pages=int(os.getenv("MAX_OCR_PAGES", "80")),
                   max_pdf_mb=int(os.getenv("MAX_PDF_MB", "30")),
                   run_minutes=int(os.getenv("RUN_MINUTES", "150")))
         if not 1 <= cfg.workers <= 16 or cfg.max_run_usd <= 0 or not 1 <= cfg.run_minutes <= 180:

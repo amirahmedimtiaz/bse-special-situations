@@ -51,4 +51,5 @@ and the daily email; failed/unreadable/pending filings remain visible.
   verified quotation. An unverified secondary quotation is discarded rather than published.
 - Added tests cover changed-day-only checkpoints, retrying an unpushed commit, OCR
   resource bounds, historical prompt-change billing and stale-profile coverage.
-  The latest local suite contains **49 passing tests**.
+  A 49-page scanned production filing also motivated an 80-page OCR cap with an
+  eight-minute total per-document timeout. The latest local suite contains **50 passing tests**.
