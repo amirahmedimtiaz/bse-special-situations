@@ -53,3 +53,33 @@ and the daily email; failed/unreadable/pending filings remain visible.
   resource bounds, historical prompt-change billing and stale-profile coverage.
   A 49-page scanned production filing also motivated an 80-page OCR cap with an
   eight-minute total per-document timeout. The latest local suite contains **50 passing tests**.
+
+## Completed production verification
+
+The deployment is a public repository using standard Ubuntu Actions runners; credentials
+are GitHub Secrets and persisted results/outbox are encrypted on the `state` branch.
+
+| Check | Observed result |
+| --- | --- |
+| Filing date | 2026-09-22, IST |
+| Feed reconciliation | 1,191 announcements, 852 companies, 24 pages |
+| Final screening coverage | 1,191 screened; zero processing errors; zero pending |
+| AI candidate classifications | 167 relevant; 74 needs-review; 950 irrelevant |
+| Extraction | 40 filings used local OCR; others used native text or supplied announcement metadata |
+| Main full-day pass | 1,364 section calls; reported API cost $1.876539; earlier tests and recovery are additional |
+| Final recovery pass | Two filings completed, including the 49-page scan; seven calls; $0.020133 |
+| Delivery | Five initial digest parts and two recovery updates; completion email confirmed in inbox |
+| Quiet rerun | Zero API calls, $0 additional API cost, zero emails |
+| Regression suite | 50 tests passed locally and on the final hosted rerun |
+
+Evidence: [main full-day run](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35870120122),
+[final recovery](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35872506898),
+[quiet rerun](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35872987220).
+The delivered HTML of the first part was checked: 50 source links, company summaries and
+coverage totals were present. The email remained unread; no mailbox labels were changed.
+
+“Screened” means the automated processing completed, not that the model's interpretation
+is guaranteed correct. The 74 needs-review items remain explicitly uncertain; many have
+sparse pages in mixed text/image PDFs, which are not automatically OCRed under the chosen
+text-first policy. Scheduled triggering is configured and active; manual hosted runs,
+state recovery and inbox delivery were verified, not an exact-time scheduling guarantee.

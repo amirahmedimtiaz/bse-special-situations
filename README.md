@@ -56,7 +56,7 @@ Requires Python 3.11+, Git, Poppler (`pdftoppm`) and Tesseract (`eng`).
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-cp .env.example .env
+cp -n .env.example .env
 # Fill .env securely; never commit it.
 .venv/bin/python -m pytest -q
 .venv/bin/python -m special_situations.cli --date 2026-09-22 --max-filings 12
