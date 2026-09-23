@@ -5,7 +5,7 @@
 The historical broad-screen/OCR results below are not evidence of the new policy's
 coverage. The model, screening policy, extraction behavior and schedule have changed.
 
-- 72 regression tests pass locally, including native text/image PDF extraction without
+- 73 regression tests pass locally, including native text/image PDF extraction without
   external binaries, zero-call no-text/local-filter skips, current-policy retail gates,
   deadline expiry, legacy/stale outbox cancellation, cross-day delivery checkpoints,
   weekly date coverage, failed-feed persistence, continued collection of other days,
@@ -30,8 +30,34 @@ coverage. The model, screening policy, extraction behavior and schedule have cha
   the same API host and `AnnSubCategoryGetData/w` endpoint. No alternative complete
   feed was substituted; access denials are not represented as zero announcements.
 
-Hosted verification of this migration is recorded below when completed. Once-weekly
-scheduling and the new code alone cannot guarantee upstream BSE access or exact timing.
+### Hosted verification and remaining blocker
+
+- Migration commit `9f57035` was pushed to the public repository. The active hosted
+  workflow was read back: exactly one cron (`17 2 * * 6`), `openai/gpt-6-luna`,
+  medium reasoning, no OCR installation. GitHub
+  [CI 35930468384](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35930468384)
+  passed the then-current 72 tests. A subsequent coverage-label regression brings
+  the suite to 73: retained older-policy/OCR results are explicitly historical, not
+  evidence that the new deployment is still running OCR.
+- [Hosted smoke 35930478006](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35930478006)
+  requested all seven dates, 2026-09-17 through 2026-09-23. All feed calls returned 403.
+  Encrypted history restored successfully. A deterministic 12-filing sample of the
+  previously collected 2026-09-22 dataset was reprocessed under the new policy:
+  **10 local-filter exclusions, one no-text skip, one AI call, $0.000222**. No sample
+  processing errors. This is NOT full-week collection/classification verification.
+- Feed failures and changed filing states were checkpointed; read-only remote audit
+  confirmed all seven date records, 12 current-profile completions, zero pending
+  messages, and the same seven historical emails sent before this migration.
+- [Quiet replay 35930618355](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35930618355)
+  made **zero model calls**, cost **$0**, and did not repeat the 12 classifications.
+  Both hosted checks used `send=false`; no migration test emails were sent. Both
+  correctly exited unsuccessfully because BSE collection was still forbidden.
+
+**Operational status: configuration deployed; current full-week feed coverage is
+blocked by BSE HTTP 403.** Successful tests and the new weekly schedule do not establish
+fresh-data delivery. BSE access must recover or an authorized complete alternative
+must be selected before fresh coverage can be verified. The app preserves failed dates
+for future recovery and does not send empty/review-only messages about these failures.
 
 ## Historical validation — 2026-09-23
 

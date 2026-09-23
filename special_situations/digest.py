@@ -65,7 +65,8 @@ def build_messages(store, day, max_entries=50, as_of=None, collection_errors=Non
         if len(groups) > 1:
             subject += f" | part {n}/{len(groups)}"
         intro = (f"Filing dates: {period} (IST). {len(eligible)} new/updated candidate filings. "
-                 f"Collected: {counts['total']}; processed: {counts['screened']}; "
+                 f"Collected: {counts['total']}; processed under current policy: {counts['current_policy_processed']}; "
+                 f"archived older-policy results: {counts['legacy_policy_processed']}; "
                  f"local text filter: {counts['local_filtered']}; skipped without text: {counts['skipped_no_text']}; "
                  f"failed: {counts['errors']}; pending: {counts['pending']}. "
                  "These are conditional research leads, not verified profitable trades; live market prices are not checked.")

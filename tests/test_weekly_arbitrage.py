@@ -99,6 +99,15 @@ def test_keyword_gate_looks_beyond_headline(filing):
     assert not classifier.has_catalyst(f, "Normal operating results and dividend declared.")
 
 
+def test_legacy_results_and_old_ocr_are_explicitly_historical(store, filing, result):
+    item = finish(store, filing, result)
+    item["state"]["result"].pop("policy")
+    item["state"]["document"] = {"method": "ocr"}
+    counts = pipeline.coverage([item])
+    assert counts["historical_ocr"] == 1 and counts["legacy_policy_processed"] == 1
+    assert counts["current_policy_processed"] == 0
+
+
 @pytest.mark.parametrize("field,value", [("terms_quote", "invented price Rs 100"), ("retail_accessible", False),
     ("stage", "completed"), ("entry_exit", ""), ("action_deadline", "2026-02-31"), ("checks", [])])
 def test_model_rejects_ungrounded_or_ineligible_positive(monkeypatch, filing, result, field, value):

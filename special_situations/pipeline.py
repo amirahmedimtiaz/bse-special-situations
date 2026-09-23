@@ -18,6 +18,7 @@ def process(item, cfg, classifier, deadline):
     state, filing = item["state"], item["filing"]
     if state.get("profile") != profile(cfg):
         state.update(profile=profile(cfg), attempts=0, status="pending", chunks={})
+        state.pop("skip_reason", None)
     try:
         if time.monotonic() >= deadline:
             raise BudgetExceeded("Runtime guard reached")
@@ -111,11 +112,14 @@ def screen_day(store, day, cfg, classifier, checkpoint=lambda: None, max_filings
 
 def coverage(items):
     result = {"total": len(items), "screened": 0, "relevant": 0, "needs_review": 0,
-              "errors": 0, "pending": 0, "ocr": 0, "skipped_no_text": 0, "local_filtered": 0}
+              "errors": 0, "pending": 0, "historical_ocr": 0, "skipped_no_text": 0, "local_filtered": 0,
+              "current_policy_processed": 0, "legacy_policy_processed": 0}
     for item in items:
         state = item["state"]
         if state["status"] == "done":
             result["screened"] += 1
+            key = "current_policy_processed" if state["result"].get("policy") == PROMPT_VERSION else "legacy_policy_processed"
+            result[key] += 1
             decision = state["result"]["decision"]
             if decision in ("relevant", "needs_review"):
                 result[decision] += 1
@@ -124,7 +128,7 @@ def coverage(items):
         else:
             result["pending"] += 1
         if state.get("document", {}).get("method") == "ocr":
-            result["ocr"] += 1
+            result["historical_ocr"] += 1
         if state.get("skip_reason") == "no_text":
             result["skipped_no_text"] += 1
         if state.get("skip_reason") == "no_catalyst_terms":
