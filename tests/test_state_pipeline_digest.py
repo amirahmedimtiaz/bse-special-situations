@@ -209,3 +209,38 @@ def test_catchup_dates():
     assert planned_dates([], date(2026, 9, 22)) == [date(2026, 9, 22)]
     assert planned_dates(["2026-09-18"], date(2026, 9, 22)) == [date(2026, 9, d) for d in range(18, 23)]
     assert planned_dates(["2026-09-18", "2026-09-22"], date(2026, 9, 22)) == [date(2026, 9, 21), date(2026, 9, 22)]
+
+
+def test_checkpoint_only_serializes_dirty_days(store, filing, tmp_path):
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    sync = StateSync(tmp_path / "copy", str(remote), Fernet.generate_key().decode())
+    sync.save(store)
+    assert not store.changed_days
+    store.ingest("2026-09-23", [], {"expected": 0})
+    assert [day for day, _ in store.partitions(store.changed_days)] == ["2026-09-23"]
+    sync.save(store)
+    assert not store.changed_days
+    item = store.get(filing["id"])
+    store.save(item)
+    assert store.changed_days == {filing["day"]}
+
+
+def test_failed_push_is_retried_even_when_files_unchanged(monkeypatch, store, tmp_path):
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    sync = StateSync(tmp_path / "copy", str(remote), Fernet.generate_key().decode())
+    original = sync.git
+    def fail_push(*args):
+        if args[0] == "push":
+            raise subprocess.CalledProcessError(1, "git push")
+        return original(*args)
+    monkeypatch.setattr(sync, "git", fail_push)
+    monkeypatch.setattr("special_situations.state_sync.time.sleep", lambda _: None)
+    with pytest.raises(subprocess.CalledProcessError):
+        sync.save(store)
+    assert sync.pending_push and store.changed_days
+    monkeypatch.setattr(sync, "git", original)
+    sync.save(store)
+    assert not sync.pending_push and not store.changed_days
+    assert original("ls-remote", "--heads", "origin", "state").strip()

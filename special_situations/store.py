@@ -17,6 +17,7 @@ def fingerprint(value) -> str:
 
 class Store:
     def __init__(self, path: Path | str):
+        self.changed_days = set()
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
         self.db.executescript("""
@@ -46,6 +47,7 @@ class Store:
                                 (row["id"], day, json.dumps(row), json.dumps(state)))
             metadata = {**metadata, "fetched_at": now()}
             self.db.execute("INSERT OR REPLACE INTO days VALUES (?, ?)", (day, json.dumps(metadata)))
+        self.changed_days.add(day)
 
     def get(self, nid):
         row = self.db.execute("SELECT payload, state FROM filings WHERE id=?", (nid,)).fetchone()
@@ -55,6 +57,7 @@ class Store:
         with self.db:
             self.db.execute("UPDATE filings SET state=? WHERE id=?",
                             (json.dumps(item["state"]), item["filing"]["id"]))
+        self.changed_days.add(item["filing"]["day"])
 
     def items(self, day: str):
         return [{"filing": json.loads(row[0]), "state": json.loads(row[1])}
@@ -71,6 +74,7 @@ class Store:
         with self.db:
             self.db.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, NULL)",
                             (message["id"], message["day"], json.dumps(message)))
+        self.changed_days.add(message["day"])
 
     def pending_messages(self):
         return [json.loads(row[0]) for row in self.db.execute(
@@ -84,13 +88,14 @@ class Store:
                 if item:
                     item["state"]["notified"] = version
                     self.db.execute("UPDATE filings SET state=? WHERE id=?", (json.dumps(item["state"]), nid))
+        self.changed_days.add(message["day"])
 
     def already_reported(self, day: str, complete: bool):
         messages = self.db.execute("SELECT data FROM messages WHERE day=? AND sent_at IS NOT NULL", (day,))
         return any(json.loads(row[0])["complete"] == complete for row in messages)
 
-    def partitions(self):
-        for day in self.days():
+    def partitions(self, days=None):
+        for day in self.days() if days is None else sorted(days):
             yield day, {"version": 1, "day": day, "metadata": self.metadata(day), "items": self.items(day),
                         "messages": [dict(r) for r in self.db.execute("SELECT * FROM messages WHERE day=?", (day,))]}
 

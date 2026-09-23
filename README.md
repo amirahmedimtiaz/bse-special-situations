@@ -88,10 +88,18 @@ Keep the generated ignored `.env` backup safe. Losing the encryption key loses a
 to deduplication/history; do not simply rotate it. State pushes require the workflow
 token's `contents: write` permission. No personal GitHub token is stored in this app.
 
+Inspect deployed coverage and outbox status without sending email or modifying remote state:
+
+```bash
+.venv/bin/python -m special_situations.audit --repo OWNER/REPO --errors
+```
+
 ## Limits and recovery
 
 - Defaults: 8 workers, 150-minute run guard, 30 MB download cap, 1,000-page text cap,
   40-page image-only OCR cap, 40,000-character sections, 6,144 output/reasoning tokens.
+  OCR has a separate two-process limit, single-threaded Tesseract and 2,400-pixel
+  maximum rendered page dimension to avoid oversubscribing a free runner.
   Oversized, corrupt, encrypted, unsupported or unreadable attachments become review items.
 - The $10/run admission guard reserves a conservative price estimate before each model
   call and records returned usage costs. Prices are read from the live model catalog.
@@ -103,6 +111,8 @@ token's `contents: write` permission. No personal GitHub token is stored in this
   those cases after the underlying issue is resolved. Unprocessed budget/time-limited
   filings remain pending and are picked up by later triggers.
 - Classification checkpoints occur every 40 processed filings and at day completion.
+  Only changed days are serialized; stable ID-based encrypted shards avoid rewriting
+  the entire historical dataset at every checkpoint.
   A hard runner termination can repeat uncheckpointed model calls. The immutable email
   outbox is persisted **before** sending and delivery state immediately afterward.
   A crash between SMTP acceptance and the subsequent checkpoint can duplicate a message;

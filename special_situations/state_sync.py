@@ -16,6 +16,7 @@ from cryptography.fernet import Fernet
 class StateSync:
     def __init__(self, folder: Path, remote: str, key: str):
         self.folder = folder
+        self.pending_push = False
         self.fernet = Fernet(key.encode())
         self.folder.mkdir(parents=True, exist_ok=True)
         self.git("init", "--initial-branch=state")
@@ -44,7 +45,8 @@ class StateSync:
 
     def save(self, store):
         changed = False
-        for day, snapshot in store.partitions():
+        dirty = set(store.changed_days)
+        for day, snapshot in store.partitions(dirty):
             # Stable ID buckets prevent re-encrypting a whole day's history at every checkpoint.
             pieces = {"meta": {**snapshot, "items": []}}
             for item in snapshot["items"]:
@@ -59,13 +61,18 @@ class StateSync:
                 temporary.write_bytes(self.fernet.encrypt(gzip.compress(data, mtime=0)))
                 temporary.replace(path)
                 changed = True
-        if not changed:
+        if changed:
+            self.git("add", "--", "*.enc")
+            self.git("commit", "-m", "Checkpoint encrypted daily filing state")
+            self.pending_push = True
+        if not self.pending_push:
+            store.changed_days.difference_update(dirty)
             return
-        self.git("add", "--", "*.enc")
-        self.git("commit", "-m", "Checkpoint encrypted daily filing state")
         for attempt in range(3):
             try:
                 self.git("push", "origin", "HEAD:refs/heads/state")
+                self.pending_push = False
+                store.changed_days.difference_update(dirty)
                 return
             except subprocess.SubprocessError:
                 if attempt == 2:

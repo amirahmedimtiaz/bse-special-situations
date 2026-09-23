@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import subprocess
 import tempfile
+import threading
 import uuid
 from pathlib import Path
 
@@ -12,6 +14,8 @@ from pypdf import PdfReader
 from .bse import HEADERS
 from .config import Config
 from .network import request
+
+_OCR_SLOTS = threading.BoundedSemaphore(2)
 
 
 def download(filing: dict, cfg: Config) -> Path:
@@ -56,14 +60,15 @@ def ocr_pdf(path: Path, page_count: int, cfg: Config) -> list[str]:
     if page_count > cfg.max_ocr_pages:
         raise ValueError(f"Image-only PDF has {page_count} pages; OCR limit is {cfg.max_ocr_pages}")
     texts = []
-    with tempfile.TemporaryDirectory(prefix="bse-ocr-") as temp:
+    with _OCR_SLOTS, tempfile.TemporaryDirectory(prefix="bse-ocr-") as temp:
         for page in range(1, page_count + 1):
             prefix = Path(temp) / f"page-{page}"
-            subprocess.run(["pdftoppm", "-f", str(page), "-l", str(page), "-r", "150",
+            subprocess.run(["pdftoppm", "-f", str(page), "-l", str(page), "-r", "150", "-scale-to", "2400",
                             "-singlefile", "-png", str(path), str(prefix)],
                            check=True, capture_output=True, timeout=60)
             result = subprocess.run(["tesseract", str(prefix.with_suffix(".png")), "stdout", "-l", "eng"],
-                                    check=True, capture_output=True, text=True, timeout=60)
+                                    check=True, capture_output=True, text=True, timeout=60,
+                                    env={**os.environ, "OMP_THREAD_LIMIT": "1", "OMP_NUM_THREADS": "1"})
             texts.append(result.stdout)
     return texts
 

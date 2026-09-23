@@ -96,6 +96,17 @@ def test_ocr_limit(tmp_path):
         documents.ocr_pdf(tmp_path / "x.pdf", 41, Config())
 
 
+def test_ocr_bounds_cpu_and_pixels(monkeypatch, tmp_path):
+    calls = []
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(stdout="Extracted text")
+    monkeypatch.setattr(documents.subprocess, "run", run)
+    assert documents.ocr_pdf(tmp_path / "x.pdf", 1, Config()) == ["Extracted text"]
+    assert calls[0][0][calls[0][0].index("-scale-to") + 1] == "2400"
+    assert calls[1][1]["env"]["OMP_THREAD_LIMIT"] == "1"
+
+
 def test_chunk_boundaries():
     text = "".join(chr(0x3000 + i) for i in range(10000))
     chunks = documents.chunks(text, 2000)
