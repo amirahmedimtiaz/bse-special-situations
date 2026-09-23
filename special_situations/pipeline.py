@@ -50,6 +50,15 @@ def screen_day(store, day, cfg, classifier, checkpoint=lambda: None, max_filings
     # A deterministic sample, not 'next N pending': rerunning a smoke test must be quiet.
     if max_filings:
         items = items[:max_filings]
+    invalidated = False
+    if reclassify:
+        for item in items:
+            if item["state"].get("profile") != profile(cfg) and item["state"]["status"] != "pending":
+                item["state"]["status"] = "pending"
+                store.save(item)
+                invalidated = True
+    if invalidated:
+        checkpoint()  # Outdated classifications are not completed coverage for this profile.
     if retry_errors:
         for item in items:
             if item["state"]["status"] == "error":

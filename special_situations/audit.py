@@ -9,8 +9,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .config import ROOT
-from .pipeline import coverage
+from .config import Config, ROOT
+from .pipeline import coverage, profile
 from .state_sync import StateSync
 from .store import Store
 
@@ -34,6 +34,8 @@ def main():
                        for part in item["state"].get("chunks", {}).values())
             messages = store.db.execute("SELECT sent_at FROM messages WHERE day=?", (day,)).fetchall()
             print(json.dumps({"day": day, **coverage(items), "companies": len({i['filing']['code'] for i in items}),
+                              "current_profile_screened": sum(i["state"]["status"] == "done"
+                                  and i["state"].get("profile") == profile(Config.from_env()) for i in items),
                               "successful_cached_calls_cost_usd": round(cost, 6),
                               "emails_sent": sum(bool(row[0]) for row in messages),
                               "emails_pending": sum(not row[0] for row in messages)}))

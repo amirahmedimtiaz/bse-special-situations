@@ -27,3 +27,28 @@ This small, deliberately chosen set checks plumbing and important stage distinct
 It is **not** a measured precision/recall benchmark or a guarantee of all special situations
 being discovered. Full production coverage and delivery are reported in Actions logs
 and the daily email; failed/unreadable/pending filings remain visible.
+
+## Hosted testing and refinements
+
+- GitHub smoke run [35828660754](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35828660754)
+  collected all 1,191 announcements and attempted a deterministic 12-filing sample:
+  11 completed, one evidence-validation error, and one successful real OCR extraction.
+- Recovery run [35868850097](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35868850097)
+  restored encrypted state and processed only that one failed filing. All 12 then
+  completed; the other 11 required no repeated model calls.
+- The first whole-day attempt exposed concurrent Tesseract CPU contention. It was
+  cancelled before email delivery, retaining checkpoints. OCR was limited to two
+  processes, one OpenMP thread per process and 2,400-pixel rendered pages.
+  The three previously timed-out PDFs (Carraro India, Parshwanath Corporation and
+  Evexia Lifecare) extracted successfully in a local concurrent test in 5.8–15.3 seconds;
+  their hosted errors also cleared after restart.
+- A manual review exposed false positives for ordinary secondary-market stake sales,
+  normal NCD borrowing and mechanical stock splits. Prompt v2 explicitly distinguishes
+  these from concrete control, distress, recapitalisation and restructuring events.
+- A six-filing live v2 check excluded those three routine cases and retained Niyogin,
+  Rajeswari and NDA Securities. Two initially rejected evidence responses were retried;
+  only source-verified quotations are retained. Relevant results require at least one
+  verified quotation. An unverified secondary quotation is discarded rather than published.
+- Added tests cover changed-day-only checkpoints, retrying an unpushed commit, OCR
+  resource bounds, historical prompt-change billing and stale-profile coverage.
+  The latest local suite contains **49 passing tests**.

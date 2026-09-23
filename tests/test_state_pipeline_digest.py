@@ -163,6 +163,17 @@ def test_historical_completed_days_do_not_rebill_after_prompt_change(store, fili
     assert stats["processed"] == 0
 
 
+def test_outdated_results_are_pending_if_reclassification_stops(store, filing, result):
+    item = finished(store, filing, result)
+    item["state"]["profile"] = "old-prompt-version"
+    store.save(item)
+    stats = pipeline.screen_day(store, filing["day"], Config(), SimpleNamespace(budget=Budget(1)),
+                                deadline=time.monotonic() - 1, reclassify=True)
+    assert stats["coverage"]["screened"] == 0 and stats["coverage"]["pending"] == 1
+    messages = digest.build_messages(store, filing["day"])
+    assert not messages[0]["complete"] and messages[0]["versions"] == {}
+
+
 def test_digest_escape_and_no_duplicates(store, filing, result):
     result["summary"] = "<script>alert('bad')</script>"
     finished(store, filing, result)
