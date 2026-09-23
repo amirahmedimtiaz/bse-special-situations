@@ -12,7 +12,7 @@ from .config import Config
 from .network import request
 from .store import fingerprint
 
-PROMPT_VERSION = "2026-09-23-v1"
+PROMPT_VERSION = "2026-09-23-v2"
 CATEGORIES = ["demerger_spinoff", "merger_arrangement", "takeover_control_open_offer",
               "delisting", "buyback_capital_return", "rights_recapitalisation",
               "distress_insolvency", "asset_sale_restructuring", "liquidation",
@@ -44,6 +44,16 @@ Exclude routine results, routine dividends, trading-window closures, routine ins
 disclosures, routine board/personnel changes, ordinary orders/capex, generic AGMs and ESOP allotments,
 unless the text establishes a specific structural transaction. Mention of a historic event alone,
 generic objects-clause powers or boilerplate about possible mergers is NOT a current event.
+Also EXCLUDE ordinary bond/NCD borrowing or refinancing, ordinary secondary-market stake sales
+or purchases (even a large block deal or a SAST 29(2) disclosure), and mechanical stock splits or
+bonus issues, unless this filing establishes a takeover/control change, open offer, distress
+restructuring, debt-for-equity conversion or an unusual cash-out mechanism. A stake falling from
+7.94% to 3.05% by sale alone is not a special situation. A normal secured NCD allotment with a
+coupon and maturity alone is not a recapitalisation event. A 10-for-1 split alone is not one either.
+Exclude broad annual authorisations to raise up to some amount through many possible routes
+without a concrete transaction. A launched/approved specific rights/QIP/preferential issue with
+actual terms, identified allottees or loan conversion may qualify. Do not equate a large rupee
+amount, normal funding, percentage holding movement or legal disclosure threshold with a catalyst.
 Use needs_review when evidence is genuinely ambiguous, not because valuation data are missing.
 Preserve exact transaction stage: a first-motion NCLT meeting order is NOT final scheme approval;
 board approval is NOT completion. Distinguish proposed terms from effective terms and cancellations.
@@ -144,13 +154,18 @@ class Classifier:
             evidence_source = normalized("\n".join([filing["subject"], filing["body"], text]))
             if result["decision"] == "relevant" and (not result["evidence"] or result["category"] == "none"):
                 raise ValueError("Relevant classification lacks supporting evidence/category")
-            for quote in result["evidence"]:
-                if normalized(quote) not in evidence_source:
-                    raise ValueError("Model evidence quote is not present in source text")
+            verified = [quote for quote in result["evidence"] if normalized(quote) in evidence_source]
+            rejected = len(result["evidence"]) - len(verified)
+            if result["decision"] == "relevant" and not verified:
+                raise ValueError("No model evidence quote is present in source text")
+            # A malformed secondary quote need not discard an otherwise grounded finding.
+            # Never retain the unverified quote; relevant findings still require exact evidence.
+            result["evidence"] = verified
             return {"result": result, "usage": {"cost_usd": charged,
                     "prompt_tokens": usage.get("prompt_tokens", 0),
                     "completion_tokens": usage.get("completion_tokens", 0)},
-                    "model": data.get("model", self.cfg.model), "prompt_version": PROMPT_VERSION}
+                    "model": data.get("model", self.cfg.model), "prompt_version": PROMPT_VERSION,
+                    "evidence_validation": {"verified": len(verified), "rejected": rejected}}
         finally:
             self.budget.settle(reservation, charged)
 

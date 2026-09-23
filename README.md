@@ -25,6 +25,9 @@ The taxonomy includes demergers/spinoffs, mergers/schemes, takeovers/control/ope
 delistings, buybacks/material capital returns, consequential rights issues/recaps,
 distress/insolvency/resolution, material asset/business transactions and liquidation.
 Routine results, ordinary operating updates and boilerplate are normally excluded.
+Ordinary NCD borrowing, secondary-market stake sales without a control/open-offer event,
+mechanical stock splits/bonus issues and unspecific annual fundraising authorisations
+are also excluded unless linked to a concrete restructuring or unusual cash-out event.
 
 ## Free hosting and schedule
 
@@ -37,6 +40,8 @@ The primary trigger is **07:47 IST**, screening the previous completed IST day.
 Backups run at 11:47, 15:47, 19:47 and 23:47 IST. Successful reruns do not resend the
 same findings or repeat completed model calls. Two recent days are refreshed for late
 postings, missed dates are caught up, and unfinished older dates are resumed.
+Prompt/model changes re-screen refreshed dates, not every completed historical day;
+an explicit `--date` can intentionally re-screen a past date under the new profile.
 
 [GitHub schedules](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
 can be delayed/dropped and may be disabled after 60 days without qualifying repository

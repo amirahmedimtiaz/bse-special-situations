@@ -32,7 +32,7 @@ def test_budget_reserves_concurrently():
     assert b.spent == .2 and b.calls == 1
 
 
-@pytest.mark.parametrize("mode", ["valid", "missing_quote", "fabricated_quote", "bad_schema", "truncated"])
+@pytest.mark.parametrize("mode", ["valid", "mixed_quotes", "missing_quote", "fabricated_quote", "bad_schema", "truncated"])
 def test_model_contract(monkeypatch, filing, result, mode):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-only")
     seen = []
@@ -41,6 +41,8 @@ def test_model_contract(monkeypatch, filing, result, mode):
         result["evidence"] = []
     if mode == "fabricated_quote":
         result["evidence"] = ["This evidence is invented"]
+    if mode == "mixed_quotes":
+        result["evidence"] = [*result["evidence"], "This secondary quote is invented"]
     if mode == "bad_schema":
         result["extra"] = True
     def request(method, url, **kwargs):
@@ -55,8 +57,10 @@ def test_model_contract(monkeypatch, filing, result, mode):
     monkeypatch.setattr(classifier, "request", request)
     b = Budget(1)
     c = Classifier(Config(), b)
-    if mode == "valid":
-        assert c.classify(filing, "")["result"] == result
+    if mode in ("valid", "mixed_quotes"):
+        output = c.classify(filing, "")
+        assert output["result"]["evidence"] == ["The board approved a scheme of demerger."]
+        assert output["evidence_validation"]["rejected"] == (1 if mode == "mixed_quotes" else 0)
     else:
         with pytest.raises(Exception):
             c.classify(filing, "")
@@ -148,6 +152,14 @@ def test_budget_failure_retains_pending(monkeypatch, store, filing):
 def test_deadline_skips_calls(store, filing):
     stats = pipeline.screen_day(store, filing["day"], Config(), SimpleNamespace(budget=Budget(1)),
                                 deadline=time.monotonic() - 1)
+    assert stats["processed"] == 0
+
+
+def test_historical_completed_days_do_not_rebill_after_prompt_change(store, filing, result):
+    item = finished(store, filing, result)
+    item["state"]["profile"] = "old-prompt-version"
+    store.save(item)
+    stats = pipeline.screen_day(store, filing["day"], Config(), SimpleNamespace(budget=Budget(1)), reclassify=False)
     assert stats["processed"] == 0
 
 

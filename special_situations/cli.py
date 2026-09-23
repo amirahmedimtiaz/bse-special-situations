@@ -61,17 +61,19 @@ def run(args):
                 checkpoint()
             # Resume unfinished older days as well as newly fetched ones.
             days = [target.isoformat()] if args.date else [d for d in store.days() if d <= target.isoformat()]
+            refreshed_days = {d.isoformat() for d in refresh}
             for day in days:
                 items = store.items(day)
                 from .pipeline import profile
                 subset = items[:args.max_filings] if args.max_filings else items
-                needs_ai = any(i["state"].get("profile") != profile(cfg) or (
+                reclassify = day in refreshed_days
+                needs_ai = any((reclassify and i["state"].get("profile") != profile(cfg)) or (
                     i["state"]["status"] != "done" and (i["state"].get("attempts", 0) < 3 or args.retry_errors))
                     for i in subset)
                 if needs_ai and time.monotonic() < deadline:
                     classifier = classifier or Classifier(cfg, budget)
                     stats = screen_day(store, day, cfg, classifier, checkpoint, args.max_filings,
-                                       args.retry_errors, deadline)
+                                       args.retry_errors, deadline, reclassify=reclassify)
                     print(json.dumps({"date": day, **stats}), flush=True)
                 previews = build_messages(store, day)
                 output = ROOT / "output"

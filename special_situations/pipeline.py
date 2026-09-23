@@ -44,7 +44,7 @@ def process(item, cfg, classifier, deadline):
 
 
 def screen_day(store, day, cfg, classifier, checkpoint=lambda: None, max_filings=0, retry_errors=False,
-               deadline=None):
+               deadline=None, reclassify=True):
     deadline = deadline or time.monotonic() + cfg.run_minutes * 60
     items = store.items(day)
     # A deterministic sample, not 'next N pending': rerunning a smoke test must be quiet.
@@ -55,7 +55,7 @@ def screen_day(store, day, cfg, classifier, checkpoint=lambda: None, max_filings
             if item["state"]["status"] == "error":
                 item["state"]["attempts"] = 0
     pending = iter(item for item in items if not (
-        item["state"].get("profile") == profile(cfg) and
+        (not reclassify or item["state"].get("profile") == profile(cfg)) and
         (item["state"]["status"] == "done" or item["state"].get("attempts", 0) >= 3)))
     count = 0
     stopped = False
