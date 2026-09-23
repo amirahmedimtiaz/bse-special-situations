@@ -1,0 +1,75 @@
+name: Daily special-situations digest
+on:
+  schedule:
+    # Primary: 07:47 IST. Backups: 11:47, 15:47, 19:47 and 23:47 IST.
+    - cron: '17 2,6,10,14,18 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Completed IST filing date (blank = yesterday plus catch-up)'
+        type: string
+        default: ''
+      max_filings:
+        description: 'Deterministic smoke sample; 0 screens all filings'
+        type: string
+        default: '0'
+      send:
+        description: 'Send email (must be false for a limited smoke sample)'
+        type: boolean
+        default: true
+      retry_errors:
+        description: 'Retry errors that have reached the three-attempt limit'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: daily-special-situations-single-writer
+  cancel-in-progress: false
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_MODEL: openai/gpt-5.6-luna
+      REASONING_EFFORT: high
+      EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+      EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+      EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+      STATE_ENCRYPTION_KEY: ${{ secrets.STATE_ENCRYPTION_KEY }}
+      GITHUB_TOKEN: ${{ github.token }}
+      WORKERS: '8'
+      MAX_RUN_USD: '10'
+      MAX_OCR_PAGES: '40'
+      MAX_PDF_MB: '30'
+      RUN_MINUTES: '150'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install application and local OCR tools
+        run: |
+          python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils tesseract-ocr
+      - name: Run regression checks
+        run: python -m pytest -q
+      - name: Screen filings and deliver digest
+        env:
+          INPUT_DATE: ${{ inputs.date }}
+          INPUT_LIMIT: ${{ inputs.max_filings || '0' }}
+          INPUT_SEND: ${{ github.event_name == 'schedule' || inputs.send }}
+          INPUT_RETRY: ${{ inputs.retry_errors }}
+        shell: bash
+        run: |
+          args=(--workflow --max-filings "$INPUT_LIMIT")
+          if [[ -n "$INPUT_DATE" ]]; then args+=(--date "$INPUT_DATE"); fi
+          if [[ "$INPUT_SEND" == 'true' ]]; then args+=(--send); fi
+          if [[ "$INPUT_RETRY" == 'true' ]]; then args+=(--retry-errors); fi
+          python -m special_situations.cli "${args[@]}"
