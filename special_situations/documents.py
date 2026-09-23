@@ -1,12 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import re
-import subprocess
-import tempfile
-import threading
-import time
 import uuid
 from pathlib import Path
 
@@ -15,9 +10,6 @@ from pypdf import PdfReader
 from .bse import HEADERS
 from .config import Config
 from .network import request
-
-_OCR_SLOTS = threading.BoundedSemaphore(2)
-
 
 def download(filing: dict, cfg: Config) -> Path:
     folder = cfg.runtime / "documents"
@@ -57,35 +49,6 @@ def download(filing: dict, cfg: Config) -> Path:
     raise RuntimeError("Unable to retrieve PDF: " + "; ".join(failures))
 
 
-def ocr_pdf(path: Path, page_count: int, cfg: Config) -> list[str]:
-    if page_count > cfg.max_ocr_pages:
-        raise ValueError(f"Image-only PDF has {page_count} pages; OCR limit is {cfg.max_ocr_pages}")
-    texts = []
-    deadline = time.monotonic() + 480
-    if not _OCR_SLOTS.acquire(timeout=480):
-        raise TimeoutError("OCR capacity wait exceeded eight minutes")
-    try:
-        def remaining():
-            seconds = deadline - time.monotonic()
-            if seconds <= 0:
-                raise TimeoutError("OCR document time limit exceeded eight minutes")
-            return min(60, seconds)
-
-        with tempfile.TemporaryDirectory(prefix="bse-ocr-") as temp:
-            for page in range(1, page_count + 1):
-                prefix = Path(temp) / f"page-{page}"
-                subprocess.run(["pdftoppm", "-f", str(page), "-l", str(page), "-r", "150", "-scale-to", "2400",
-                                "-singlefile", "-png", str(path), str(prefix)],
-                               check=True, capture_output=True, timeout=remaining())
-                result = subprocess.run(["tesseract", str(prefix.with_suffix(".png")), "stdout", "-l", "eng"],
-                                        check=True, capture_output=True, text=True, timeout=remaining(),
-                                        env={**os.environ, "OMP_THREAD_LIMIT": "1", "OMP_NUM_THREADS": "1"})
-                texts.append(result.stdout)
-    finally:
-        _OCR_SLOTS.release()
-    return texts
-
-
 def extract(path: Path, cfg: Config) -> dict:
     reader = PdfReader(path)
     if reader.is_encrypted and not reader.decrypt(""):
@@ -95,12 +58,9 @@ def extract(path: Path, cfg: Config) -> dict:
     texts = [page.extract_text() or "" for page in reader.pages]
     method = "text"
     if sum(len(re.sub(r"\s", "", t)) for t in texts) < 40:
-        texts = ocr_pdf(path, len(reader.pages), cfg)
-        method = "ocr"
-    if sum(len(re.sub(r"\s", "", t)) for t in texts) < 40:
-        raise ValueError("No usable text after extraction and OCR fallback")
+        method = "no_text"
     gaps = [i + 1 for i, text in enumerate(texts) if len(text.strip()) < 20]
-    content = "\n\n".join(f"[PDF page {i + 1}]\n{text}" for i, text in enumerate(texts))
+    content = "\n\n".join(f"[PDF page {i + 1}]\n{text}" for i, text in enumerate(texts)) if method == "text" else ""
     return {"text": content, "method": method, "pages": len(texts), "sparse_pages": gaps,
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 

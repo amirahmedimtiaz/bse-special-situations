@@ -8,7 +8,7 @@ from special_situations.store import Store
 def row():
     return {"NEWSID": "abc-123", "SCRIP_CD": 500001, "DT_TM": "2026-09-22T14:00:00",
             "ATTACHMENTNAME": "abc.pdf", "SLONGNAME": "Example Ltd", "NEWSSUB": "Scheme update",
-            "HEADLINE": "The board approved a scheme of demerger.", "CATEGORYNAME": "Company Update"}
+            "HEADLINE": "The board approved a tender buyback at Rs 120 per share.", "CATEGORYNAME": "Company Update"}
 
 
 @pytest.fixture
@@ -18,9 +18,13 @@ def filing(row):
 
 @pytest.fixture
 def result():
-    return {"decision": "relevant", "category": "demerger_spinoff", "stage": "board_approved",
-            "summary": "The board approved a demerger scheme, subject to further approvals.",
-            "why_special": "The scheme separates businesses.", "evidence": ["The board approved a scheme of demerger."]}
+    return {"decision": "relevant", "category": "tender_buyback", "stage": "board_approved",
+            "summary": "The board approved a tender buyback at Rs 120, subject to approvals.",
+            "entry_exit": "Eligible public shareholders could tender shares for Rs 120, subject to acceptance.",
+            "retail_accessible": True, "terms_quote": "tender buyback at Rs 120 per share.",
+            "action_deadline": "", "deadline_quote": "",
+            "checks": ["Check eligibility, live purchase price, costs and acceptance risk."],
+            "evidence": ["The board approved a tender buyback at Rs 120 per share."]}
 
 
 @pytest.fixture

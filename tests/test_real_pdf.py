@@ -1,9 +1,4 @@
-"""Real Poppler/Tesseract integration; no external API or source PDF is required."""
-import re
-import shutil
-import subprocess
-
-import pytest
+"""Native PDF text/image integration without OCR or external programs."""
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject, NumberObject
 
@@ -11,8 +6,7 @@ from special_situations.config import Config
 from special_situations.documents import extract
 
 
-@pytest.mark.skipif(not (shutil.which("pdftoppm") and shutil.which("tesseract")), reason="OCR binaries unavailable")
-def test_real_image_only_pdf_ocr(tmp_path):
+def test_real_native_text_and_image_only_skip(tmp_path):
     writer = PdfWriter()
     page = writer.add_blank_page(width=612, height=792)
     font = DictionaryObject({NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"),
@@ -25,14 +19,9 @@ def test_real_image_only_pdf_ocr(tmp_path):
     text_pdf = tmp_path / "text.pdf"
     writer.write(text_pdf)
     assert extract(text_pdf, Config())["method"] == "text"
-    subprocess.run(["pdftoppm", "-f", "1", "-l", "1", "-singlefile", "-r", "120", "-gray",
-                    str(text_pdf), str(tmp_path / "scan")], check=True, capture_output=True, timeout=60)
-    data = (tmp_path / "scan.pgm").read_bytes()
-    match = re.match(rb"P5\s+(\d+)\s+(\d+)\s+255\s", data)
-    assert match
-    width, height = map(int, match.groups())
+    width, height = 10, 10
     image = DecodedStreamObject()
-    image.set_data(data[match.end():])
+    image.set_data(bytes(range(100)))
     image.update({NameObject("/Type"): NameObject("/XObject"), NameObject("/Subtype"): NameObject("/Image"),
                   NameObject("/Width"): NumberObject(width), NameObject("/Height"): NumberObject(height),
                   NameObject("/ColorSpace"): NameObject("/DeviceGray"), NameObject("/BitsPerComponent"): NumberObject(8)})
@@ -47,5 +36,5 @@ def test_real_image_only_pdf_ocr(tmp_path):
     scanned.write(scanned_path)
     assert not PdfReader(scanned_path).pages[0].extract_text().strip()
     recovered = extract(scanned_path, Config())
-    assert recovered["method"] == "ocr"
-    assert "scheme of demerger" in recovered["text"]
+    assert recovered["method"] == "no_text"
+    assert recovered["text"] == ""

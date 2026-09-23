@@ -1,57 +1,96 @@
-# BSE special-situations digest
+# Weekly BSE retail-arbitrage candidates
 
-A daily **BSE-wide** corporate-announcement screener, independent of any company watchlist.
-It uses OpenRouter `openai/gpt-5.6-luna` with high reasoning and emails source-linked,
-short summaries of corporate special situations. This is event discovery, not investment advice.
+BSE-wide corporate-announcement screening, independent of a company watchlist.
+Uses OpenRouter **`openai/gpt-6-luna`**, reasoning **`medium`**. Emails contain only
+filings with a plausible small-investor arbitrage mechanism, original links and short
+summaries. No qualifying new filings means **no email**.
 
-## How it works
+## Scope and safeguards
 
-1. Reconcile every page of BSE's corporate-announcement feed for a completed IST date
-   against the exchange's advertised count. Preserve announcement identity and source metadata.
-2. Extract PDF text locally. Only if the whole PDF has fewer than 40 non-whitespace
-   text characters, fall back to local English Tesseract OCR. Mixed text/image PDFs
-   keep the available text and flag sparse pages, without invoking OCR for every page.
-3. Screen **every announcement**, not just keyword candidates. Split long text into
-   overlapping sections; validate structured results and verbatim evidence quotes.
-   Include proposals, approvals, record dates, updates, completions and withdrawals.
-4. Save classification and per-section results in SQLite. Checkpoint encrypted,
-   compressed per-day snapshots to the `state` Git branch. No raw PDFs, secrets,
-   email addresses or plaintext screening results are published.
-5. Send a digest with all newly qualifying filing links and brief summaries, followed
-   by items needing review. Split large digests into 50-entry emails without dropping
-   links. Errors and pending work appear in coverage totals, never as negative screens.
+- Candidates need explicit numerical transaction terms, source-verified quotations
+  and a potential retail entry/exit, exchange or entitlement mechanism. Examples:
+  fixed-price tender buybacks/open offers, cash mergers, share exchanges, priced
+  rights entitlements, delisting exits and unusual cash-outs. Mere restructuring,
+  private QIPs, open-market buybacks, ordinary dividends/splits, operating updates
+  and equity wipe-outs are not enough. Demergers need defined distribution terms
+  and identifiable tradable legs, not merely an NCLT notice.
+- **No live market-price feed or profitability calculation.** These are conditional
+  research leads, not proven arbitrage or investment advice. Emails state missing
+  eligibility, acceptance, liquidity/hedging, costs/taxes and completion checks.
+  Do not assume a new buyer qualifies for a past record-date entitlement.
+- Expired participation deadlines are suppressed at email delivery, when a deadline
+  is stated in the filing. Unknown dates are not invented. Current deal status and
+  later amendments still require verification; model interpretation can be wrong.
+- No review-only, failure-only, empty or old broad-policy emails. Legacy/stale outbox
+  messages are cancelled with a retained audit record before they can be sent.
 
-The taxonomy includes demergers/spinoffs, mergers/schemes, takeovers/control/open offers,
-delistings, buybacks/material capital returns, consequential rights issues/recaps,
-distress/insolvency/resolution, material asset/business transactions and liquidation.
-Routine results, ordinary operating updates and boilerplate are normally excluded.
-Ordinary NCD borrowing, secondary-market stake sales without a control/open-offer event,
-mechanical stock splits/bonus issues and unspecific annual fundraising authorisations
-are also excluded unless linked to a concrete restructuring or unusual cash-out event.
+## Processing and API-cost controls
 
-## Free hosting and schedule
+1. Reconcile every page for each completed IST filing date against BSE's count;
+   retain identity, timestamps, source metadata and original attachment links.
+2. Download PDFs with size/time limits and extract native text with `pypdf`.
+   **No OCR or vision calls.** PDFs with fewer than 40 non-whitespace characters
+   are recorded as `no_text` and skipped without model calls. Mixed PDFs retain
+   readable text and flag sparse/image pages. Metadata-only announcements can be
+   screened if BSE supplied no attachment; an unreadable PDF is not silently replaced
+   with a headline-only positive.
+3. A broad local catalyst-keyword gate checks the **entire extracted text plus
+   announcement metadata**, not only the headline. Filings with no matching terms
+   incur zero model calls. This saves cost but can miss unusual wording; it is not
+   exhaustive AI review of every announcement. Counts distinguish local filtering,
+   no-text skips, failed work and pending work.
+4. Send all available text of shortlisted filings in overlapping 60,000-character
+   sections. Medium reasoning, compact negative JSON and a 3,072-token output/reasoning
+   cap reduce API use. Do not truncate source documents to their first pages. Strict
+   schema, literal evidence/terms checks and eligibility rules gate positive results.
+5. Cache completed classifications and section responses. Reruns only process changed,
+   unfinished or explicitly refreshed old-profile work. Completed older historical
+   dates are not bulk-reclassified just because the model changed.
+6. Persist SQLite state as compressed, encrypted stable ID-based shards on the `state`
+   Git branch. Only changed days are rewritten. Raw PDFs, credentials, email addresses
+   and plaintext classification results are not published.
+7. Build one period digest, split into 50-entry parts only when needed. Each entry has
+   its filing link, brief summary, possible mechanism, quoted terms and required checks.
+   Previously emailed versions are not repeated. Persist the outbox before SMTP and
+   checkpoint every source date's delivery state afterward.
 
-The public repository uses **standard Ubuntu GitHub Actions runners**, which are free
-for public repositories under [GitHub's current billing policy](https://docs.github.com/en/actions/concepts/billing-and-usage).
-There is no hosted server, external database, paid OCR service or paid storage service.
-OpenRouter inference and any email-provider charges are separate from hosting.
+The [OpenRouter model catalog](https://openrouter.ai/openai/gpt-6-luna) reported base
+rates of **$0.10/million input tokens and $0.50/million output tokens** on 2026-09-24.
+Prices may change; the app reads the live catalog and conservatively reserves for
+retries and any higher context-price tiers. A **$10/run admission guard** is retained;
+it is not a provider-enforced billing cap. Configure an OpenRouter key/account limit
+as well. Failed ambiguous calls count conservatively toward the guard. No paid
+PDF/OCR/search plugins are used. Actual weekly spend depends on filing volume, length,
+shortlist rate and retries; the small live test is not a monthly-cost forecast.
 
-The primary trigger is **07:47 IST**, screening the previous completed IST day.
-Backups run at 11:47, 15:47, 19:47 and 23:47 IST. Successful reruns do not resend the
-same findings or repeat completed model calls. Two recent days are refreshed for late
-postings, missed dates are caught up, and unfinished older dates are resumed.
-Prompt/model changes re-screen refreshed dates, not every completed historical day;
-an explicit `--date` can intentionally re-screen a past date under the new profile.
+## Free deployment and weekly schedule
 
-[GitHub schedules](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
-can be delayed/dropped and may be disabled after 60 days without qualifying repository
-activity. Scheduled execution is not an uptime guarantee. Check Actions/your daily
-email; enable GitHub workflow-failure notifications. If no digest arrives, run the
-workflow manually and inspect its result. No always-on monitoring service is included.
+Public repository, standard Ubuntu GitHub Actions runners, no hosted server or paid
+database/storage service. Inference and any email-provider charges are separate.
+See [GitHub Actions billing](https://docs.github.com/en/actions/concepts/billing-and-usage).
+
+**One scheduled run: Saturday 07:47 IST (02:17 UTC), cron `17 2 * * 6`.**
+It reads the preceding seven completed IST dates, not just Friday. Missed dates,
+recorded feed failures and unfinished older work are recovered in later runs.
+There are no daily backup triggers. Manual dispatch remains available for testing
+and recovery. The workflow filename remains `daily-digest.yml` for compatibility;
+its display name and only cron are weekly. The separate Tests workflow has no
+schedule and never sends emails or screens live filings.
+
+Weekly screening can miss short offer windows. Filings posted late after their date
+has left the refreshed window can also be missed. GitHub schedules may be delayed,
+dropped or disabled after inactivity; see [schedule behavior](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
+Silence means either no new candidates **or** a processing/feed problem: check Actions
+and enable GitHub failure notifications. The application does not send failure emails.
+
+BSE availability is external: HTTP 403 is surfaced as a collection failure, never
+an empty day. Other dates continue, successful checkpoints survive, and the job exits
+unsuccessfully if coverage is incomplete. No proxy or anti-bot bypass is included.
+See [TESTING.md](TESTING.md) for current verification and known deployment limitations.
 
 ## Install and run
 
-Requires Python 3.11+, Git, Poppler (`pdftoppm`) and Tesseract (`eng`).
+Requires Python 3.11+ and Git. No Poppler/Tesseract/system OCR packages.
 
 ```bash
 python3 -m venv .venv
@@ -59,90 +98,50 @@ python3 -m venv .venv
 cp -n .env.example .env
 # Fill .env securely; never commit it.
 .venv/bin/python -m pytest -q
+# One completed day, deterministic smoke sample, no email:
 .venv/bin/python -m special_situations.cli --date 2026-09-22 --max-filings 12
+# Previous seven completed days plus recovery:
 .venv/bin/python -m special_situations.cli --send
 ```
 
-Without `--send`, the command only generates ignored `output/YYYY-MM-DD-N.html` previews.
-`--max-filings` selects a deterministic sample and cannot be combined with `--send`.
-Local state lives in ignored `.runtime/`; local runs do not change deployed state unless
-`--workflow` and the remote/key configuration are supplied. Avoid concurrent local runs
-sharing a runtime directory. Production uses a single-writer workflow concurrency group.
+Without `--send`, only ignored `output/weekly-YYYY-MM-DD-N.html` previews are generated
+when candidates exist. Old preview files are historical artifacts, not current run
+status. `--max-filings` cannot be combined with `--send`. Local state is ignored in
+`.runtime/`; local commands do not change remote state unless `--workflow` is supplied.
+Do not run two writers against the same runtime. Production uses one concurrency group.
 
-## Deploy
+## Credentials, deployment and recovery
 
-Create a public GitHub repository and push `main`. Set these GitHub Actions secrets:
-
-| Secret | Purpose |
-| --- | --- |
-| `OPENROUTER_API_KEY` | Paid inference via OpenRouter |
-| `EMAIL_SENDER` | Gmail account sending the digest |
-| `EMAIL_PASSWORD` | Gmail app password, not the normal account password |
-| `EMAIL_RECEIVER` | Digest destination |
-| `STATE_ENCRYPTION_KEY` | Fernet key protecting the persistent results/outbox |
-
-For an existing local email configuration and an OpenRouter key in the environment:
+GitHub Secrets: `OPENROUTER_API_KEY`, `EMAIL_SENDER`, `EMAIL_PASSWORD` (Gmail app
+password), `EMAIL_RECEIVER`, `STATE_ENCRYPTION_KEY` (Fernet). The existing recipient
+and encryption key are preserved during model/schedule updates.
 
 ```bash
+# Initial configuration only; does not implicitly rotate an existing local state key:
 .venv/bin/python scripts/configure_deployment.py --repo OWNER/REPO --email-env /path/to/email.env
-gh workflow run daily-digest.yml --repo OWNER/REPO -f max_filings=12 -f send=false
+gh workflow run daily-digest.yml --repo OWNER/REPO -f date=2026-09-22 -f max_filings=12 -f send=false
+# Explicit recovery or whole-week run, with candidate-only delivery:
 gh workflow run daily-digest.yml --repo OWNER/REPO -f max_filings=0 -f send=true
-```
-
-Keep the generated ignored `.env` backup safe. Losing the encryption key loses access
-to deduplication/history; do not simply rotate it. State pushes require the workflow
-token's `contents: write` permission. No personal GitHub token is stored in this app.
-
-Inspect deployed coverage and outbox status without sending email or modifying remote state:
-
-```bash
+# Read-only encrypted state audit:
 .venv/bin/python -m special_situations.audit --repo OWNER/REPO --errors
 ```
 
-## Limits and recovery
+Keep the ignored mode-0600 `.env` backup safe. Losing/rotating the encryption key
+without migration loses readable history/deduplication. The workflow token has
+`contents: write` to checkpoint encrypted state, no separate personal token required.
 
-- Defaults: 8 workers, 150-minute run guard, 30 MB download cap, 1,000-page text cap,
-  80-page image-only OCR cap, 40,000-character sections, 6,144 output/reasoning tokens.
-  OCR has a separate two-process limit, single-threaded Tesseract and 2,400-pixel
-  maximum rendered page dimension to avoid oversubscribing a free runner. Each OCR
-  document has an eight-minute total time limit, including the wait for OCR capacity.
-  Oversized, corrupt, encrypted, unsupported or unreadable attachments become review items.
-- The $10/run admission guard reserves a conservative price estimate before each model
-  call and records returned usage costs. Prices are read from the live model catalog.
-  This is **not a provider-enforced billing cap**; set an OpenRouter key/account limit too.
-  Ambiguous failed requests are charged against the guard conservatively. No web-search
-  or paid PDF/OCR plugins are used. See [OpenRouter usage accounting](https://openrouter.ai/docs/guides/guides/usage-accounting).
-- HTTP timeouts, bounded retries and backoff handle transient failures. Each filing gets
-  at most three failed processing attempts before manual review; `--retry-errors` retries
-  those cases after the underlying issue is resolved. Unprocessed budget/time-limited
-  filings remain pending and are picked up by later triggers.
-- Classification checkpoints occur every 40 processed filings and at day completion.
-  Only changed days are serialized; stable ID-based encrypted shards avoid rewriting
-  the entire historical dataset at every checkpoint.
-  A hard runner termination can repeat uncheckpointed model calls. The immutable email
-  outbox is persisted **before** sending and delivery state immediately afterward.
-  A crash between SMTP acceptance and the subsequent checkpoint can duplicate a message;
-  deterministic Message-ID helps but SMTP does not guarantee exactly-once delivery.
-- Model success does not prove perfect recall or summary accuracy. Verbatim quotes are
-  checked locally, but every semantic claim cannot be mechanically verified. Image/text
-  gaps, metadata-only filings and ambiguous cases are visible. No claim of exhaustive
-  investment-opportunity detection is made. Scope is BSE corporate announcements, not
-  every document on every BSE webpage or NSE-only announcements.
-- Persisted daily encrypted Git partitions avoid an external database, but Git history
-  still grows. Monitor repository size and plan archival if usage approaches GitHub limits.
-  A changed filing is re-screened when its headline/body/attachment/timestamp changes;
-  same-URL PDF replacements with unchanged metadata are not automatically detected.
+Defaults: 8 workers, 150-minute runtime guard, 180-minute job timeout, 30 MB/PDF,
+1,000 pages/PDF. Corrupt, encrypted, unsupported or oversized files remain logged
+errors, not negative screens. Each filing has at most three failed attempts before
+`--retry-errors` is needed. Budget/runtime-limited work remains pending. Checkpoints
+occur every 40 processed filings and at day boundaries; hard termination may repeat
+uncheckpointed calls. A crash after SMTP acceptance but before the next checkpoint
+can duplicate mail; deterministic Message-ID is not an exactly-once guarantee.
 
-## Security and testing
-
-Filing text is untrusted data, never instructions or executable code. Links come from
-BSE metadata, not the AI. HTML is escaped. API/email credentials and the state key are
-GitHub Secrets; local credentials are ignored and written with mode 0600. Standard
-dependencies process exchange PDFs; malicious PDF/parser and upstream-availability risks
-cannot be eliminated. Review dependencies periodically.
-
-Offline tests cover pagination/count/date errors, extraction/OCR routing and limits,
-chunk coverage, model schema/evidence, spending admission, caching/retries, encrypted
-state round-trips, idempotent email, failure checkpoints, digest splitting/escaping and
-catch-up dates. Live model calls are deliberately not part of pull-request tests.
-See [PLAN.md](PLAN.md) for the initial implementation plan.
+State Git history grows and needs eventual archival. Metadata revisions trigger
+re-screening; replacing a PDF at the same URL with unchanged metadata is not detected.
+Scope is the BSE corporate-announcement feed, not all BSE webpages or NSE-only filings.
+Filing content is untrusted data, not executable instructions. HTML is escaped; links
+come from exchange metadata, never the model. Dependency/parser and upstream risks
+cannot be eliminated. Regression tests cover the above policy, state and mail gates;
+live paid calls are never part of pull-request tests.

@@ -4,7 +4,7 @@ import copy
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
-from .classifier import BudgetExceeded, PROMPT_VERSION, combine
+from .classifier import BudgetExceeded, PROMPT_VERSION, combine, has_catalyst
 from .documents import chunks, read_filing
 from .store import fingerprint, now
 
@@ -23,6 +23,15 @@ def process(item, cfg, classifier, deadline):
             raise BudgetExceeded("Runtime guard reached")
         document = read_filing(filing, cfg)
         state["document"] = {k: v for k, v in document.items() if k != "text"}
+        reason = "no_text" if document["method"] == "no_text" else (
+            "no_catalyst_terms" if not has_catalyst(filing, document["text"]) else "")
+        if reason:
+            state.update(status="done", skip_reason=reason, updated_at=now(),
+                         result={"decision": "needs_review" if reason == "no_text" else "irrelevant",
+                                 "findings": [], "warnings": [reason], "policy": PROMPT_VERSION})
+            state.pop("error", None)
+            return item
+        state.pop("skip_reason", None)
         results = []
         for part in chunks(document["text"], cfg.chunk_chars):
             key = classifier.cache_key(filing, part)
@@ -102,7 +111,7 @@ def screen_day(store, day, cfg, classifier, checkpoint=lambda: None, max_filings
 
 def coverage(items):
     result = {"total": len(items), "screened": 0, "relevant": 0, "needs_review": 0,
-              "errors": 0, "pending": 0, "ocr": 0}
+              "errors": 0, "pending": 0, "ocr": 0, "skipped_no_text": 0, "local_filtered": 0}
     for item in items:
         state = item["state"]
         if state["status"] == "done":
@@ -116,4 +125,8 @@ def coverage(items):
             result["pending"] += 1
         if state.get("document", {}).get("method") == "ocr":
             result["ocr"] += 1
+        if state.get("skip_reason") == "no_text":
+            result["skipped_no_text"] += 1
+        if state.get("skip_reason") == "no_catalyst_terms":
+            result["local_filtered"] += 1
     return result

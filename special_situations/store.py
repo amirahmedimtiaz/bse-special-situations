@@ -70,6 +70,12 @@ class Store:
         row = self.db.execute("SELECT metadata FROM days WHERE day=?", (day,)).fetchone()
         return json.loads(row[0]) if row else None
 
+    def collection_failed(self, day, error):
+        metadata = {**(self.metadata(day) or {}), "collection_error": str(error)[:600], "failed_at": now()}
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO days VALUES (?,?)", (day, json.dumps(metadata)))
+        self.changed_days.add(day)
+
     def queue(self, message):
         with self.db:
             self.db.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, NULL)",
@@ -77,8 +83,16 @@ class Store:
         self.changed_days.add(message["day"])
 
     def pending_messages(self):
-        return [json.loads(row[0]) for row in self.db.execute(
+        messages = [json.loads(row[0]) for row in self.db.execute(
             "SELECT data FROM messages WHERE sent_at IS NULL ORDER BY day,id")]
+        return [m for m in messages if not m.get("cancelled_at")]
+
+    def cancel_message(self, message, reason):
+        # Preserve original content and a cancellation audit in the encrypted snapshots.
+        message = {**message, "cancelled_at": now(), "cancel_reason": reason}
+        with self.db:
+            self.db.execute("UPDATE messages SET data=? WHERE id=?", (json.dumps(message), message["id"]))
+        self.changed_days.add(message["day"])
 
     def message_sent(self, message):
         with self.db:
@@ -88,6 +102,7 @@ class Store:
                 if item:
                     item["state"]["notified"] = version
                     self.db.execute("UPDATE filings SET state=? WHERE id=?", (json.dumps(item["state"]), nid))
+                    self.changed_days.add(item["filing"]["day"])
         self.changed_days.add(message["day"])
 
     def already_reported(self, day: str, complete: bool):

@@ -32,13 +32,16 @@ def main():
             items = store.items(day)
             cost = sum(part.get("usage", {}).get("cost_usd", 0) for item in items
                        for part in item["state"].get("chunks", {}).values())
-            messages = store.db.execute("SELECT sent_at FROM messages WHERE day=?", (day,)).fetchall()
+            messages = store.db.execute("SELECT sent_at, data FROM messages WHERE day=?", (day,)).fetchall()
             print(json.dumps({"day": day, **coverage(items), "companies": len({i['filing']['code'] for i in items}),
                               "current_profile_screened": sum(i["state"]["status"] == "done"
                                   and i["state"].get("profile") == profile(Config.from_env()) for i in items),
                               "successful_cached_calls_cost_usd": round(cost, 6),
                               "emails_sent": sum(bool(row[0]) for row in messages),
-                              "emails_pending": sum(not row[0] for row in messages)}))
+                              "emails_pending": sum(not row[0] and not json.loads(row[1]).get("cancelled_at")
+                                                    for row in messages),
+                              "emails_cancelled": sum(bool(json.loads(row[1]).get("cancelled_at")) for row in messages),
+                              "collection_error": store.metadata(day).get("collection_error")}))
             if args.errors:
                 for item in items:
                     if item["state"]["status"] == "error":

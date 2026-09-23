@@ -1,5 +1,9 @@
 # Implementation plan
 
+Historical original plan below. Superseded on 2026-09-24 by the weekly, native-text-only,
+GPT-6 Luna/medium retail-arbitrage implementation described in README.md. OCR, broad
+special-situation/review emails, empty digests and daily backup triggers are removed.
+
 1. Create an independent Python application for the whole BSE corporate-announcement
    feed. Collect every page for a complete IST date, check unique IDs against the
    exchange count, and retain date, company, source links and source metadata.

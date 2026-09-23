@@ -72,50 +72,19 @@ def test_text_never_ocr(monkeypatch, tmp_path):
     monkeypatch.setattr(documents, "PdfReader", lambda _: SimpleNamespace(is_encrypted=False,
         pages=[SimpleNamespace(extract_text=lambda: "This is a readable filing with sufficient ordinary text."),
                SimpleNamespace(extract_text=lambda: "")]))
-    monkeypatch.setattr(documents, "ocr_pdf", lambda *a: pytest.fail("Mixed PDF must not invoke OCR"))
+    assert not hasattr(documents, "ocr_pdf")
     data = documents.extract(source, Config())
     assert data["method"] == "text" and data["sparse_pages"] == [2]
 
 
-def test_no_text_uses_ocr(monkeypatch, tmp_path):
+def test_no_text_is_skipped(tmp_path):
     source = tmp_path / "empty.pdf"
     writer = PdfWriter()
     writer.add_blank_page(width=300, height=300)
     writer.write(source)
-    calls = []
-    def fake_ocr(*args):
-        calls.append(args)
-        return ["The board approved a demerger, subject to regulatory and shareholder approvals."]
-    monkeypatch.setattr(documents, "ocr_pdf", fake_ocr)
     data = documents.extract(source, Config())
-    assert data["method"] == "ocr" and len(calls) == 1
-
-
-def test_ocr_limit(tmp_path):
-    with pytest.raises(ValueError, match="OCR limit"):
-        documents.ocr_pdf(tmp_path / "x.pdf", 41, Config(max_ocr_pages=40))
-
-
-def test_total_ocr_timeout_releases_capacity(monkeypatch, tmp_path):
-    times = iter([0, 481])
-    released = []
-    monkeypatch.setattr(documents.time, "monotonic", lambda: next(times))
-    monkeypatch.setattr(documents, "_OCR_SLOTS", SimpleNamespace(acquire=lambda **k: True,
-                         release=lambda: released.append(True)))
-    with pytest.raises(TimeoutError, match="eight minutes"):
-        documents.ocr_pdf(tmp_path / "x.pdf", 1, Config())
-    assert released == [True]
-
-
-def test_ocr_bounds_cpu_and_pixels(monkeypatch, tmp_path):
-    calls = []
-    def run(command, **kwargs):
-        calls.append((command, kwargs))
-        return SimpleNamespace(stdout="Extracted text")
-    monkeypatch.setattr(documents.subprocess, "run", run)
-    assert documents.ocr_pdf(tmp_path / "x.pdf", 1, Config()) == ["Extracted text"]
-    assert calls[0][0][calls[0][0].index("-scale-to") + 1] == "2400"
-    assert calls[1][1]["env"]["OMP_THREAD_LIMIT"] == "1"
+    assert data["method"] == "no_text" and data["text"] == ""
+    assert data["sparse_pages"] == [1]
 
 
 def test_chunk_boundaries():

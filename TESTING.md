@@ -1,4 +1,39 @@
-# Validation record — 2026-09-23
+# Validation record
+
+## Weekly retail-arbitrage migration — 2026-09-24
+
+The historical broad-screen/OCR results below are not evidence of the new policy's
+coverage. The model, screening policy, extraction behavior and schedule have changed.
+
+- 72 regression tests pass locally, including native text/image PDF extraction without
+  external binaries, zero-call no-text/local-filter skips, current-policy retail gates,
+  deadline expiry, legacy/stale outbox cancellation, cross-day delivery checkpoints,
+  weekly date coverage, failed-feed persistence, continued collection of other days,
+  and the exact single weekly cron/model/reasoning deployment configuration.
+- A live OpenRouter call returned `openai/gpt-6-luna` with requested medium reasoning
+  and the new strict schema. A clearly labelled synthetic tender-buyback case was
+  classified relevant, with quoted Rs 120 terms, participation deadline and explicit
+  eligibility/acceptance/price checks. Cost: **$0.0003733**, 818 prompt/583 completion
+  tokens. This was an isolated evaluation, never ingested or emailed as a real filing.
+- Six previously downloaded real BSE PDFs were re-extracted natively. Niyogin's scheme
+  notice (two sections) and Embassy's ordinary financing filing (one section) returned
+  irrelevant. Rajeswari, JSW Dulux and Donear were rejected by the local text gate;
+  Entero had no native text and was skipped. Three paid calls cost **$0.003355**.
+  No OCR ran and no emails were sent. These cached PDFs test the new pipeline, not
+  current feed availability. This is a small selected set, not a precision/recall study.
+- The older scheduled runs
+  [35878596535](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35878596535)
+  and [35922969426](https://github.com/amirahmedimtiaz/bse-special-situations/actions/runs/35922969426)
+  failed at BSE collection with HTTP 403. The same endpoint also returned 403 locally
+  on 2026-09-24, including an ordinary browser-header/session warmup check. BSE's own
+  current site configuration (`/assets/data/appConfig.json`) and public JS reference
+  the same API host and `AnnSubCategoryGetData/w` endpoint. No alternative complete
+  feed was substituted; access denials are not represented as zero announcements.
+
+Hosted verification of this migration is recorded below when completed. Once-weekly
+scheduling and the new code alone cannot guarantee upstream BSE access or exact timing.
+
+## Historical validation — 2026-09-23
 
 ## Before deployment
 

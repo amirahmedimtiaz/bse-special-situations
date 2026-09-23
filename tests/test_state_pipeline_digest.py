@@ -17,7 +17,8 @@ from special_situations.store import Store, fingerprint
 
 def finished(store, filing, result):
     item = store.get(filing["id"])
-    item["state"].update(status="done", result={"decision": result["decision"], "findings": [result], "warnings": []})
+    item["state"].update(status="done", result={"decision": result["decision"], "findings": [result],
+                                              "warnings": [], "policy": classifier.PROMPT_VERSION})
     store.save(item)
     return item
 
@@ -59,13 +60,15 @@ def test_model_contract(monkeypatch, filing, result, mode):
     c = Classifier(Config(), b)
     if mode in ("valid", "mixed_quotes"):
         output = c.classify(filing, "")
-        assert output["result"]["evidence"] == ["The board approved a scheme of demerger."]
+        assert output["result"]["evidence"] == [filing["body"]]
         assert output["evidence_validation"]["rejected"] == (1 if mode == "mixed_quotes" else 0)
     else:
         with pytest.raises(Exception):
             c.classify(filing, "")
     assert b.spent == .001 and b.reserved == pytest.approx(0)
-    assert seen[-1]["json"]["reasoning"] == {"effort": "high"}
+    assert seen[-1]["json"]["model"] == "openai/gpt-6-luna"
+    assert seen[-1]["json"]["reasoning"] == {"effort": "medium"}
+    assert seen[-1]["json"]["max_tokens"] == 3072
 
 
 def test_partial_text_cannot_be_confident_negative(result):
@@ -171,7 +174,7 @@ def test_outdated_results_are_pending_if_reclassification_stops(store, filing, r
                                 deadline=time.monotonic() - 1, reclassify=True)
     assert stats["coverage"]["screened"] == 0 and stats["coverage"]["pending"] == 1
     messages = digest.build_messages(store, filing["day"])
-    assert not messages[0]["complete"] and messages[0]["versions"] == {}
+    assert messages == []
 
 
 def test_digest_escape_and_no_duplicates(store, filing, result):
@@ -219,19 +222,21 @@ def test_digest_split_keeps_every_link(store, filing, result):
         assert sum(row["pdf_url"] in m["html"] for m in messages) == 1
 
 
-def test_empty_completed_day_emails_once():
+def test_empty_completed_day_never_emails():
     store = Store(":memory:")
     store.ingest("2026-09-22", [], {"expected": 0})
     sent = []
     digest.dispatch(store, "2026-09-22", lambda: None, sent.append)
     digest.dispatch(store, "2026-09-22", lambda: None, sent.append)
-    assert len(sent) == 1 and sent[0]["complete"]
+    assert sent == []
 
 
 def test_catchup_dates():
-    assert planned_dates([], date(2026, 9, 22)) == [date(2026, 9, 22)]
-    assert planned_dates(["2026-09-18"], date(2026, 9, 22)) == [date(2026, 9, d) for d in range(18, 23)]
-    assert planned_dates(["2026-09-18", "2026-09-22"], date(2026, 9, 22)) == [date(2026, 9, 21), date(2026, 9, 22)]
+    week = [date(2026, 9, d) for d in range(16, 23)]
+    assert planned_dates([], date(2026, 9, 22)) == week
+    assert planned_dates(["2026-09-18"], date(2026, 9, 22)) == week
+    assert planned_dates(["2026-09-18", "2026-09-22"], date(2026, 9, 22)) == week
+    assert planned_dates(["2026-09-10"], date(2026, 9, 22)) == [date(2026, 9, d) for d in range(11, 23)]
 
 
 def test_checkpoint_only_serializes_dirty_days(store, filing, tmp_path):
